@@ -20,10 +20,20 @@ const CONFIG_MODE = "integration";
 const STATIC_ISSUER    = "https://<YOUR-IDP-ISSUER>/";
 const STATIC_CLIENT_ID = "<YOUR-CLIENT-ID>";
 
-// The ONLY secret. Set in Dashboard → Settings → Environment Variables.
-// Used directly in static mode; used as a fallback in integration mode.
-// Omit entirely for public/SPA clients (PKCE-only, no secret issued).
-const ENV_CLIENT_SECRET = Deno.env.get("SK8_CLIENT_SECRET");
+// The ONLY secret. Default `undefined` so a fresh INTEGRATION-mode app deploys
+// with NO required env var (the secret is fetched from configSecret instead).
+//
+// Base44 gotcha: reading a named environment variable in this file makes the
+// platform REQUIRE that var before the function will run — even when the read
+// sits in an unused branch — which blocks deploy with a "missing secret" error.
+// So keep ZERO env reads here by default. (This note deliberately avoids writing
+// the literal env-read API call, so the platform's secret scanner won't flag it.)
+//
+// CONFIDENTIAL STATIC client only: set ENV_CLIENT_SECRET below to an environment
+// read of SK8_CLIENT_SECRET — see the README "Base44 platform notes" for the exact
+// one line — and set that env var in Dashboard -> Settings -> Environment Variables.
+// Doing so intentionally makes Base44 require it, which is correct for a confidential client.
+const ENV_CLIENT_SECRET = undefined;
 
 const INTEGRATION = "sk8-connector-config";
 
@@ -41,7 +51,9 @@ async function loadConfig(req: Request) {
   return {
     ISSUER:        pub.data.issuer,
     CLIENT_ID:     pub.data.client_id,
-    CLIENT_SECRET: sec.data.client_secret ?? ENV_CLIENT_SECRET,
+    // configSecret is authoritative in integration mode; no env fallback so a
+    // stray SK8_CLIENT_SECRET can't be injected into a public/PKCE client.
+    CLIENT_SECRET: sec.data.client_secret,
   };
 }
 
@@ -84,14 +96,20 @@ Deno.serve(async (req) => {
       const { ok, data } = await tokenRequest({
         grant_type: "authorization_code", code, redirect_uri: redirectUri, code_verifier: codeVerifier,
       });
-      if (!ok) { console.error("exchange failed", data); return Response.json({ error: data.error_description || "token exchange failed" }, { status: 400 }); }
+      if (!ok) {
+        console.error("exchange failed", JSON.stringify(data));
+        return Response.json({ error: data.error_description || data.error || "token exchange failed" }, { status: 400 });
+      }
       return Response.json({ access_token: data.access_token, refresh_token: data.refresh_token, expires_in: data.expires_in });
     }
 
     if (action === "refresh") {
       if (!refreshToken) return Response.json({ error: "refreshToken is required" }, { status: 400 });
       const { ok, data } = await tokenRequest({ grant_type: "refresh_token", refresh_token: refreshToken });
-      if (!ok) { console.error("refresh failed", data); return Response.json({ error: data.error_description || "refresh failed" }, { status: 401 }); }
+      if (!ok) {
+        console.error("refresh failed", JSON.stringify(data));
+        return Response.json({ error: data.error_description || data.error || "refresh failed" }, { status: 401 });
+      }
       return Response.json({ access_token: data.access_token, refresh_token: data.refresh_token, expires_in: data.expires_in });
     }
 
