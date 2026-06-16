@@ -9,48 +9,119 @@ values change per deployment, and only one of them is a secret.
 
 ---
 
-## ⚙️ For the Base44 agent — do exactly this
+## 🔀 Two ways to supply the config — pick one
 
-1. **Copy these files verbatim** to the same paths in the target app:
+The connector reads the same handful of per-deployment values either way; you choose **where
+they come from** with a single switch (`CONFIG_MODE`):
 
-   | From this repo | To the app |
-   |----------------|------------|
-   | `src/lib/sk8Client.js` | `src/lib/sk8Client.js` |
-   | `src/lib/sk8Config.js` | `src/lib/sk8Config.js` |
-   | `src/pages/OAuthCallback.jsx` | `src/pages/OAuthCallback.jsx` |
-   | `base44/functions/sk8OAuth/entry.ts` | `base44/functions/sk8OAuth/entry.ts` |
-   | `base44/functions/sk8Query/entry.ts` | `base44/functions/sk8Query/entry.ts` |
+| Mode | Where values live | Use when |
+|------|-------------------|----------|
+| **`static`** | Filled into the connector files at build time | One-off app, or you want everything self-contained in the app |
+| **`integration`** | Fetched at runtime from the **`sk8-connector-config`** custom integration | You manage many apps and want one central place to change issuer / client id / MCP URL / secret |
 
-2. **Fill only the marked config values** (table below). Do **not** edit `sk8Client.js`, the
-   bodies of the backend functions, or the callback logic.
+In **integration** mode the values (including the client secret) are managed once, centrally,
+and every app inherits them — change them in one place and all apps follow. In **static** mode
+each app holds its own copy. Both modes are otherwise identical: same auth, same data API.
 
-3. **Merge the App.jsx guard** (see *App wiring* below) so `/oauth/callback` renders before
-   the auth provider mounts.
+> The switch lives in three places and they must all agree: `src/lib/sk8Config.js`,
+> `base44/functions/sk8OAuth/entry.ts`, and `base44/functions/sk8Query/entry.ts`
+> (each has a `CONFIG_MODE` constant at the top).
 
-4. **Set `SK8_CLIENT_SECRET`** in Dashboard → Settings → Environment Variables — only if the
-   IdP issued a client secret. Omit it for public/SPA clients.
+---
 
-5. **Register `<app-origin>/oauth/callback`** as an allowed redirect URI in the IdP.
+## 📋 Copy ONE of these into your Base44 prompt
 
-That is the entire integration. The data API is `listTools()`, `listDatasets()`,
-`queryDataset(dataset, body)`, and `fetchRows(dataset, { take, skip })` from `@/lib/sk8Client`.
+Paste the block for the mode you want. (Replace the `<…>` placeholders in the static block.)
+
+### ▶ Integration mode (centrally-managed config — recommended for fleets)
+
+```text
+Build my app using the SK8 ↔ Base44 connector at https://github.com/sk8io/base44.
+Copy ALL connector files verbatim into the same paths. Use INTEGRATION mode:
+- Set CONFIG_MODE = "integration" in src/lib/sk8Config.js,
+  base44/functions/sk8OAuth/entry.ts, and base44/functions/sk8Query/entry.ts.
+- Use the existing workspace custom integration named exactly "sk8-connector-config"
+  (my admin has already registered it with the X-Config-Key header).
+- Do NOT fill in any client properties — they load automatically at runtime.
+- Merge the /oauth/callback guard into src/App.jsx exactly as the repo README shows.
+- Register <my-app-origin>/oauth/callback as an allowed redirect URI in the IdP.
+```
+
+### ▶ Static mode (values baked into the app)
+
+```text
+Build my app using the SK8 ↔ Base44 connector at https://github.com/sk8io/base44.
+Copy ALL connector files verbatim into the same paths. Use STATIC mode:
+- Set CONFIG_MODE = "static" in src/lib/sk8Config.js,
+  base44/functions/sk8OAuth/entry.ts, and base44/functions/sk8Query/entry.ts.
+- In src/lib/sk8Config.static.js fill:
+    ISSUER        = <OIDC issuer URL>
+    CLIENT_ID     = <IdP client id>
+    RESOURCE_MODE = <"audience" or "scope">
+    AUDIENCE      = <SK8 API identifier>     (only if RESOURCE_MODE is "audience")
+    API_SCOPES    = <["api://…/access"]>     (only if RESOURCE_MODE is "scope")
+    MCP_URL       = <SK8 MCP endpoint>
+- In base44/functions/sk8OAuth/entry.ts set STATIC_ISSUER and STATIC_CLIENT_ID to the
+  same ISSUER and CLIENT_ID.
+- In base44/functions/sk8Query/entry.ts set STATIC_MCP_URL to the same MCP_URL.
+- Set SK8_CLIENT_SECRET in Dashboard → Settings → Environment Variables
+  (only if the IdP issued a client secret; omit for public/SPA clients).
+- Merge the /oauth/callback guard into src/App.jsx exactly as the repo README shows.
+- Register <my-app-origin>/oauth/callback as an allowed redirect URI in the IdP.
+```
+
+---
+
+## Files to copy (both modes)
+
+| From this repo | To the app |
+|----------------|------------|
+| `src/lib/sk8Config.js` | `src/lib/sk8Config.js` |
+| `src/lib/sk8Config.static.js` | `src/lib/sk8Config.static.js` |
+| `src/lib/sk8Config.integration.js` | `src/lib/sk8Config.integration.js` |
+| `src/lib/sk8Client.js` | `src/lib/sk8Client.js` |
+| `src/pages/OAuthCallback.jsx` | `src/pages/OAuthCallback.jsx` |
+| `base44/functions/sk8OAuth/entry.ts` | `base44/functions/sk8OAuth/entry.ts` |
+| `base44/functions/sk8Query/entry.ts` | `base44/functions/sk8Query/entry.ts` |
+
+Copy all of them regardless of mode — the unused provider is inert. Then set `CONFIG_MODE`
+and (static only) fill the marked values. Do **not** edit `sk8Client.js`, the bodies of the
+backend functions, or the callback logic.
 
 ---
 
 ## Configuration — the only things that change per deployment
 
-All non-secret except `SK8_CLIENT_SECRET`.
+All non-secret except the client secret.
+
+### Static mode
 
 | Where | Value | Notes |
 |-------|-------|-------|
-| `src/lib/sk8Config.js` → `ISSUER` | OIDC issuer URL | trailing slash as the IdP publishes it |
-| `src/lib/sk8Config.js` → `CLIENT_ID` | IdP client id | public |
-| `src/lib/sk8Config.js` → `RESOURCE_MODE` | `"audience"` or `"scope"` | see IdP matrix |
-| `src/lib/sk8Config.js` → `AUDIENCE` | SK8 API identifier | when `RESOURCE_MODE = "audience"` |
-| `src/lib/sk8Config.js` → `API_SCOPES` | `["api://<app-id>/access"]` | when `RESOURCE_MODE = "scope"` |
-| `base44/functions/sk8OAuth/entry.ts` → `ISSUER`, `CLIENT_ID` | same as sk8Config | duplicated because backend can't import frontend config |
-| `base44/functions/sk8Query/entry.ts` → `MCP_URL` | SK8 MCP endpoint | e.g. `https://<sk8-host>/api-gateway/v1/mcp` |
+| `src/lib/sk8Config.static.js` → `ISSUER` | OIDC issuer URL | trailing slash optional (stripped before discovery) |
+| `src/lib/sk8Config.static.js` → `CLIENT_ID` | IdP client id | public |
+| `src/lib/sk8Config.static.js` → `RESOURCE_MODE` | `"audience"` or `"scope"` | see IdP matrix |
+| `src/lib/sk8Config.static.js` → `AUDIENCE` | SK8 API identifier | when `RESOURCE_MODE = "audience"` |
+| `src/lib/sk8Config.static.js` → `API_SCOPES` | `["api://<app-id>/access"]` | when `RESOURCE_MODE = "scope"` |
+| `src/lib/sk8Config.static.js` → `MCP_URL` | SK8 MCP endpoint | e.g. `https://<sk8-host>/api-gateway/v1/mcp` |
+| `sk8OAuth/entry.ts` → `STATIC_ISSUER`, `STATIC_CLIENT_ID` | same as above | duplicated because backend can't import frontend config |
+| `sk8Query/entry.ts` → `STATIC_MCP_URL` | same as `MCP_URL` | duplicated for the same reason |
 | env var `SK8_CLIENT_SECRET` | IdP client secret | **the only secret**; omit for public clients |
+
+### Integration mode
+
+Nothing to fill in the app. A workspace admin registers the **`sk8-connector-config`** custom
+integration once (Settings → Integrations → New Integration), pointing at the SK8 config
+service, with the **`X-Config-Key`** header set to the service's key. The service exposes:
+
+| Operation | Returns | Called by |
+|-----------|---------|-----------|
+| `GET /functions/configPublic` | `issuer`, `client_id`, `resource_mode`, `audience`, `api_scopes`, `mcp_url` | frontend config load + `sk8Query` (for `mcp_url`) + `sk8OAuth` |
+| `GET /functions/configSecret` | `client_secret` (only) | `sk8OAuth` backend only |
+
+The client secret is fetched **only** by the backend `sk8OAuth` function (via `configSecret`)
+and never reaches the browser. Base44 injects `X-Config-Key` server-side, so the key is never
+exposed to the browser either.
 
 ### IdP matrix
 
@@ -125,6 +196,10 @@ bounded fetch and treat it as non-scaling until a `contains` filter is available
 
 ## How it works (so you don't need to re-derive it)
 
+- **Config:** the connector reads every per-deployment value through `getSk8Config()`
+  (frontend) / `loadConfig()` (backend). `CONFIG_MODE` picks the provider — static consts or
+  the `sk8-connector-config` integration — and everything downstream is identical. Static
+  mode resolves instantly (no network), so login latency is unchanged.
 - **Auth:** OIDC authorization-code flow with **PKCE always on**; the client secret is sent
   only when present, so the same code serves confidential (Web) and public (SPA) IdP clients.
   Endpoints come from OIDC discovery, so no IdP-specific URLs are hardcoded.
@@ -140,10 +215,13 @@ bounded fetch and treat it as non-scaling until a `contains` filter is available
 
 | Issue | Resolution |
 |-------|-----------|
-| Endpoints differ per IdP | Resolved from `<ISSUER>/.well-known/openid-configuration`; never hardcode. |
+| Which mode? | Set `CONFIG_MODE` to the **same** value in all three files (`sk8Config.js`, `sk8OAuth/entry.ts`, `sk8Query/entry.ts`). |
+| Integration mode 401 on config load | The `sk8-connector-config` integration isn't registered, or its `X-Config-Key` header is missing/wrong. |
+| Integration name mismatch | The custom integration must be named exactly `sk8-connector-config`. |
+| Endpoints differ per IdP | Resolved from `<ISSUER>/.well-known/openid-configuration`; never hardcode. Discovery is cached **per issuer**, so a config change re-discovers. |
 | Targeting the SK8 API | Auth0/Okta use the `audience` param; Entra/Keycloak use a resource scope. Set `RESOURCE_MODE`. |
 | Token endpoint format | Form-encoded; JSON is rejected by Okta/Entra/Keycloak. (Handled — don't change.) |
-| Public vs confidential client | PKCE always; secret sent only if `SK8_CLIENT_SECRET` is set. Omit it for SPA clients. |
+| Public vs confidential client | PKCE always; secret sent only if present. Omit `SK8_CLIENT_SECRET` / return `{}` from `configSecret` for SPA clients. |
 | No refresh token | Enable **offline access** on the IdP API; the `offline_access` scope alone isn't enough. |
 | Issuer mismatch | SK8's expected issuer must equal the token `iss` (e.g. Entra v1 `sts.windows.net` vs v2 `…/v2.0`). |
 | Base44 auth intercept | `/oauth/callback` must render outside the auth provider (App wiring). |
@@ -154,8 +232,9 @@ bounded fetch and treat it as non-scaling until a `contains` filter is available
 
 ## Pinning (for bulletproof reuse)
 
-Tag releases (e.g. `v3.0.0`) and point Base44 at a specific tag or commit rather than the
-moving branch, so every app builds against an identical, verified connector.
+Tag releases (e.g. `v4.0.0`) and point Base44 at a specific tag or commit rather than the
+moving branch, so every app builds against an identical, verified connector. (`v4` introduces
+the `CONFIG_MODE` switch and the integration provider; pre-`v4` tags are static-only.)
 
 For multi-user deployments, move token custody server-side: persist the IdP tokens keyed to the
 authenticated Base44 user and have `sk8Query` look them up, so bearer tokens never reach the
