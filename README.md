@@ -61,7 +61,12 @@ Then merge the /oauth/callback guard into src/App.jsx exactly as the repo README
 register <my-app-origin>/oauth/callback as an allowed redirect URI in the IdP.
 
 Create the two backend functions by their EXACT names — sk8OAuth and sk8Query — and paste their
-code verbatim. Treat sk8Client.js, the two function bodies, and OAuthCallback.jsx as FROZEN: do
+code verbatim. The function bodies are PLAIN JAVASCRIPT even though the files are named entry.ts —
+do NOT add TypeScript type annotations and do NOT rewrite them in TypeScript. Base44 runs backend
+functions on Deno as .js and does NOT strip types, so any TS syntax (`: Request`, `: any`,
+`as Error`, `catch (e: any)`, generics) makes the function fail to deploy/start — the symptom is
+`/functions/sk8OAuth` returning 404 / "Token exchange failed" at login even though the path is right.
+Treat sk8Client.js, the two function bodies, and OAuthCallback.jsx as FROZEN: do
 NOT rewrite them while debugging. (A past debugging rewrite silently reverted sk8Query to the
 wrong MCP protocol and broke data loading after auth already worked — the connector logic was
 never the problem.)
@@ -258,6 +263,14 @@ bounded fetch and treat it as non-scaling until a `contains` filter is available
   `undefined`: an **integration-mode app must deploy with zero `Deno.env.get` calls**, or the
   function fails with a missing-secret error (the symptom is "Token exchange failed" at login).
   Only a confidential *static* client adds the literal back — and then it genuinely needs the env var.
+- **Backend functions are plain JavaScript, not TypeScript.** Even though the file is named
+  `entry.ts`, the body carries **zero type annotations on purpose**. Base44 deploys these on Deno
+  as `.js` and does **not** transpile or strip types — any TS syntax (`req: Request`, `: any`,
+  `(error as Error)`, `catch (e: any)`, `ReturnType<…>`, `: Promise<string>`) causes a parse error,
+  so the function deploys but never starts. The symptom is `POST /functions/sk8OAuth` → 404 /
+  "Token exchange failed" at login even though the path is correct. Keep them annotation-free; do
+  not "TypeScript-ify" them. (A `.ts` file with no type syntax is valid JavaScript byte-for-byte,
+  so it runs whether Base44 keeps the `.ts` name or mirrors it to `.js`.)
 - **Functions live at `base44/functions/<name>/entry.ts`** — that is the correct path Base44
   mirrors to git. Do **not** relocate them to `functions/<name>.js`.
 - **A stray `base44/functions/<name>/entry/entry.ts`** may appear after the builder copies this

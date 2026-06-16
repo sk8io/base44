@@ -37,7 +37,7 @@ const ENV_CLIENT_SECRET = undefined;
 
 const INTEGRATION = "sk8-connector-config";
 
-async function loadConfig(req: Request) {
+async function loadConfig(req) {
   if (CONFIG_MODE === "static") {
     return { ISSUER: STATIC_ISSUER, CLIENT_ID: STATIC_CLIENT_ID, CLIENT_SECRET: ENV_CLIENT_SECRET };
   }
@@ -58,8 +58,8 @@ async function loadConfig(req: Request) {
 }
 
 // ---- OIDC discovery (cached, keyed by issuer) -----------------------------
-let _meta: any = null, _metaIssuer: string | null = null;
-async function oidcMeta(issuer: string) {
+let _meta = null, _metaIssuer = null;
+async function oidcMeta(issuer) {
   const iss = issuer.replace(/\/$/, "");
   if (_meta && _metaIssuer === iss) return _meta;
   const res = await fetch(`${iss}/.well-known/openid-configuration`);
@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
   try {
     const cfg = await loadConfig(req);
 
-    async function tokenRequest(extra: Record<string, string>) {
+    async function tokenRequest(extra) {
       const { token_endpoint } = await oidcMeta(cfg.ISSUER);
       const payload = {
         client_id: cfg.CLIENT_ID,
@@ -116,6 +116,6 @@ Deno.serve(async (req) => {
     return Response.json({ error: "unknown action" }, { status: 400 });
   } catch (error) {
     console.error("sk8OAuth error", error);
-    return Response.json({ error: (error as Error).message }, { status: 500 });
+    return Response.json({ error: error.message }, { status: 500 });
   }
 });
