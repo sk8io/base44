@@ -50,8 +50,9 @@ Copy ALL connector files verbatim into the same paths, then choose the config mo
   ISSUER, CLIENT_ID, RESOURCE_MODE, AUDIENCE (if audience mode) or API_SCOPES (if scope mode),
   MCP_URL, and the client secret. Put the non-secret values in src/lib/sk8Config.static.js,
   mirror ISSUER/CLIENT_ID into sk8OAuth/entry.ts (STATIC_ISSUER / STATIC_CLIENT_ID) and MCP_URL
-  into sk8Query/entry.ts (STATIC_MCP_URL), and set SK8_CLIENT_SECRET in
-  Dashboard → Settings → Environment Variables (omit it for public/SPA clients).
+  into sk8Query/entry.ts (STATIC_MCP_URL). For a CONFIDENTIAL client only, also set
+  ENV_CLIENT_SECRET = Deno.env.get("SK8_CLIENT_SECRET") in sk8OAuth/entry.ts and set that env
+  var in Dashboard → Settings → Environment Variables. Omit both for public/SPA (PKCE) clients.
 
 Do NOT invent values or leave any <...> placeholder. If you cannot determine whether the
 integration exists, ASK ME which mode to use rather than guessing.
@@ -101,7 +102,7 @@ All non-secret except the client secret.
 | `src/lib/sk8Config.static.js` → `MCP_URL` | SK8 MCP endpoint | e.g. `https://<sk8-host>/api-gateway/v1/mcp` |
 | `sk8OAuth/entry.ts` → `STATIC_ISSUER`, `STATIC_CLIENT_ID` | same as above | duplicated because backend can't import frontend config |
 | `sk8Query/entry.ts` → `STATIC_MCP_URL` | same as `MCP_URL` | duplicated for the same reason |
-| env var `SK8_CLIENT_SECRET` | IdP client secret | **the only secret**; omit for public clients |
+| `sk8OAuth/entry.ts` → `ENV_CLIENT_SECRET` + env var `SK8_CLIENT_SECRET` | IdP client secret | **confidential clients only.** Default is `undefined`; set it to `Deno.env.get("SK8_CLIENT_SECRET")` and set the env var. Omit both for public/PKCE clients. See *Base44 platform notes*. |
 
 ### Integration mode
 
@@ -224,6 +225,21 @@ bounded fetch and treat it as non-scaling until a `contains` filter is available
 | Cloud → SK8 reachability | Base44 functions must reach the IdP token endpoint and the SK8 MCP URL. |
 
 ---
+
+## Base44 platform notes (so the next app deploys clean)
+
+- **`Deno.env.get("X")` makes X a _required_ secret.** Base44 statically scans function source
+  for `Deno.env.get` literals and refuses to run the function until that secret is configured —
+  even when the call sits in an unused branch. That's why `ENV_CLIENT_SECRET` defaults to
+  `undefined`: an **integration-mode app must deploy with zero `Deno.env.get` calls**, or the
+  function fails with a missing-secret error (the symptom is "Token exchange failed" at login).
+  Only a confidential *static* client adds the literal back — and then it genuinely needs the env var.
+- **Functions live at `base44/functions/<name>/entry.ts`** — that is the correct path Base44
+  mirrors to git. Do **not** relocate them to `functions/<name>.js`.
+- **A stray `base44/functions/<name>/entry/entry.ts`** may appear after the builder copies this
+  repo — it's a duplicate of the real `entry.ts`; delete it.
+- **The frontend calls functions with `fetch("/functions/<name>")`** — no `base44.functions.invoke`
+  needed, and the integration-mode config fetch works before the user signs in.
 
 ## Pinning (for bulletproof reuse)
 
