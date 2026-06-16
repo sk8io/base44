@@ -7,6 +7,11 @@ Connect + PKCE, with refresh and stateful MCP session handling) and querying SK8
 auth or query logic — it is already correct and battle-tested.** Only a handful of config
 values change per deployment, and only one of them is a secret.
 
+> **Pinned version: `v4.0.0`.** Build new apps against the tag
+> [`https://github.com/sk8io/base44/tree/v4.0.0`](https://github.com/sk8io/base44/tree/v4.0.0),
+> **not** the moving default branch, so every app builds from an identical, verified snapshot.
+> Bump the tag in the prompt below when you cut a new release.
+
 ---
 
 ## 🔀 Two ways to supply the config — pick one
@@ -38,7 +43,8 @@ You don't pick the mode — the builder infers it by checking whether the
 single block:
 
 ```text
-Build my app using the SK8 ↔ Base44 connector at https://github.com/sk8io/base44.
+Build my app using the SK8 ↔ Base44 connector at https://github.com/sk8io/base44/tree/v4.0.0
+(use this EXACT tag — do NOT use the default branch).
 Copy ALL connector files verbatim into the same paths, then choose the config mode AUTOMATICALLY:
 
 - If a workspace custom integration named exactly "sk8-connector-config" already exists,
