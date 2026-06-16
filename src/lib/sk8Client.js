@@ -1,19 +1,26 @@
 // ============================================================================
 // SK8 ↔ Base44 connector — frontend client
-// FROZEN: do not modify. All per-deployment values live in sk8Config.js.
+// FROZEN: do not modify. Identical in both config modes — it only ever reads
+// per-deployment values through getSk8Config() (see sk8Config.js).
 // ============================================================================
-import { SK8_CONFIG } from "@/lib/sk8Config";
+import { getSk8Config, REDIRECT_PATH } from "@/lib/sk8Config";
 
 const TOKEN_KEY = "sk8_token", REFRESH_KEY = "sk8_refresh", EXPIRY_KEY = "sk8_expiry";
 const STATE_KEY = "sk8_oauth_state", VERIFIER_KEY = "sk8_pkce_verifier";
 
-// ---- OIDC discovery (cached) ----------------------------------------------
-let _discovery = null;
-function oidc() {
-  if (!_discovery) {
-    _discovery = fetch(`${SK8_CONFIG.ISSUER.replace(/\/$/, "")}/.well-known/openid-configuration`)
-      .then((r) => { if (!r.ok) throw new Error(`OIDC discovery failed: ${r.status}`); return r.json(); });
-  }
+// ---- OIDC discovery (cached, keyed by issuer) -----------------------------
+// Keyed by issuer so a config change (e.g. integration mode pointing at a new
+// IdP) re-discovers instead of serving stale endpoints. Caches the resolved
+// value, not the promise, so a transient failure isn't cached permanently.
+let _discovery = null, _discoveryIssuer = null;
+async function oidc() {
+  const { ISSUER } = await getSk8Config();
+  const issuer = ISSUER.replace(/\/$/, "");
+  if (_discovery && _discoveryIssuer === issuer) return _discovery;
+  const r = await fetch(`${issuer}/.well-known/openid-configuration`);
+  if (!r.ok) throw new Error(`OIDC discovery failed: ${r.status}`);
+  _discovery = await r.json();
+  _discoveryIssuer = issuer;
   return _discovery;
 }
 
@@ -27,6 +34,7 @@ async function challengeOf(verifier) {
 }
 
 export async function getLoginUrl() {
+  const cfg = await getSk8Config();
   const { authorization_endpoint } = await oidc();
   const state = randomB64(16);
   const verifier = randomB64(32);
@@ -34,20 +42,20 @@ export async function getLoginUrl() {
   sessionStorage.setItem(VERIFIER_KEY, verifier);
 
   const scope = [
-    ...SK8_CONFIG.BASE_SCOPES,
-    ...(SK8_CONFIG.RESOURCE_MODE === "scope" ? SK8_CONFIG.API_SCOPES : []),
+    ...cfg.BASE_SCOPES,
+    ...(cfg.RESOURCE_MODE === "scope" ? cfg.API_SCOPES : []),
   ].join(" ");
 
   const params = new URLSearchParams({
     response_type: "code",
-    client_id: SK8_CONFIG.CLIENT_ID,
-    redirect_uri: window.location.origin + SK8_CONFIG.REDIRECT_PATH,
+    client_id: cfg.CLIENT_ID,
+    redirect_uri: window.location.origin + REDIRECT_PATH,
     scope,
     state,
     code_challenge: await challengeOf(verifier),
     code_challenge_method: "S256",
   });
-  if (SK8_CONFIG.RESOURCE_MODE === "audience") params.set("audience", SK8_CONFIG.AUDIENCE);
+  if (cfg.RESOURCE_MODE === "audience") params.set("audience", cfg.AUDIENCE);
   return `${authorization_endpoint}?${params.toString()}`;
 }
 
