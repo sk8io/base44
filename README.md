@@ -11,8 +11,10 @@ values change per deployment, and only one of them is a secret.
 
 ## 🔀 Two ways to supply the config — pick one
 
-The connector reads the same handful of per-deployment values either way; you choose **where
-they come from** with a single switch (`CONFIG_MODE`):
+The connector reads the same handful of per-deployment values either way; the mode — **where
+they come from** — is captured by a single switch (`CONFIG_MODE`), which the Base44 builder
+sets for you by detecting whether the `sk8-connector-config` integration exists (see the
+prompt below):
 
 | Mode | Where values live | Use when |
 |------|-------------------|----------|
@@ -29,46 +31,39 @@ each app holds its own copy. Both modes are otherwise identical: same auth, same
 
 ---
 
-## 📋 Copy ONE of these into your Base44 prompt
+## 📋 Copy this into your Base44 prompt
 
-Paste the block for the mode you want. (Replace the `<…>` placeholders in the static block.)
-
-### ▶ Integration mode (centrally-managed config — recommended for fleets)
-
-```text
-Build my app using the SK8 ↔ Base44 connector at https://github.com/sk8io/base44.
-Copy ALL connector files verbatim into the same paths. Use INTEGRATION mode:
-- Set CONFIG_MODE = "integration" in src/lib/sk8Config.js,
-  base44/functions/sk8OAuth/entry.ts, and base44/functions/sk8Query/entry.ts.
-- Use the existing workspace custom integration named exactly "sk8-connector-config"
-  (my admin has already registered it with the X-Config-Key header).
-- Do NOT fill in any client properties — they load automatically at runtime.
-- Merge the /oauth/callback guard into src/App.jsx exactly as the repo README shows.
-- Register <my-app-origin>/oauth/callback as an allowed redirect URI in the IdP.
-```
-
-### ▶ Static mode (values baked into the app)
+You don't pick the mode — the builder infers it by checking whether the
+**`sk8-connector-config`** custom integration already exists in your workspace. Paste this
+single block:
 
 ```text
 Build my app using the SK8 ↔ Base44 connector at https://github.com/sk8io/base44.
-Copy ALL connector files verbatim into the same paths. Use STATIC mode:
-- Set CONFIG_MODE = "static" in src/lib/sk8Config.js,
-  base44/functions/sk8OAuth/entry.ts, and base44/functions/sk8Query/entry.ts.
-- In src/lib/sk8Config.static.js fill:
-    ISSUER        = <OIDC issuer URL>
-    CLIENT_ID     = <IdP client id>
-    RESOURCE_MODE = <"audience" or "scope">
-    AUDIENCE      = <SK8 API identifier>     (only if RESOURCE_MODE is "audience")
-    API_SCOPES    = <["api://…/access"]>     (only if RESOURCE_MODE is "scope")
-    MCP_URL       = <SK8 MCP endpoint>
-- In base44/functions/sk8OAuth/entry.ts set STATIC_ISSUER and STATIC_CLIENT_ID to the
-  same ISSUER and CLIENT_ID.
-- In base44/functions/sk8Query/entry.ts set STATIC_MCP_URL to the same MCP_URL.
-- Set SK8_CLIENT_SECRET in Dashboard → Settings → Environment Variables
-  (only if the IdP issued a client secret; omit for public/SPA clients).
-- Merge the /oauth/callback guard into src/App.jsx exactly as the repo README shows.
-- Register <my-app-origin>/oauth/callback as an allowed redirect URI in the IdP.
+Copy ALL connector files verbatim into the same paths, then choose the config mode AUTOMATICALLY:
+
+- If a workspace custom integration named exactly "sk8-connector-config" already exists,
+  use INTEGRATION mode: set CONFIG_MODE = "integration" in src/lib/sk8Config.js,
+  base44/functions/sk8OAuth/entry.ts, and base44/functions/sk8Query/entry.ts. Fill nothing —
+  the values load from that integration at runtime.
+
+- Otherwise use STATIC mode: set CONFIG_MODE = "static" in the same three files and ASK ME for
+  ISSUER, CLIENT_ID, RESOURCE_MODE, AUDIENCE (if audience mode) or API_SCOPES (if scope mode),
+  MCP_URL, and the client secret. Put the non-secret values in src/lib/sk8Config.static.js,
+  mirror ISSUER/CLIENT_ID into sk8OAuth/entry.ts (STATIC_ISSUER / STATIC_CLIENT_ID) and MCP_URL
+  into sk8Query/entry.ts (STATIC_MCP_URL), and set SK8_CLIENT_SECRET in
+  Dashboard → Settings → Environment Variables (omit it for public/SPA clients).
+
+Do NOT invent values or leave any <...> placeholder. If you cannot determine whether the
+integration exists, ASK ME which mode to use rather than guessing.
+
+Then merge the /oauth/callback guard into src/App.jsx exactly as the repo README shows, and
+register <my-app-origin>/oauth/callback as an allowed redirect URI in the IdP.
 ```
+
+> The inference happens **once, at build time**, and the result is written explicitly into the
+> three `CONFIG_MODE` constants — there's no runtime auto-detect, so a transient integration
+> outage can never silently fall back to placeholder values. The "ASK ME rather than guess"
+> clause is the guardrail if the builder can't see the workspace's integrations.
 
 ---
 
