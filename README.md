@@ -59,6 +59,18 @@ integration exists, ASK ME which mode to use rather than guessing.
 
 Then merge the /oauth/callback guard into src/App.jsx exactly as the repo README shows, and
 register <my-app-origin>/oauth/callback as an allowed redirect URI in the IdP.
+
+Create the two backend functions by their EXACT names — sk8OAuth and sk8Query — and paste their
+code verbatim. Treat sk8Client.js, the two function bodies, and OAuthCallback.jsx as FROZEN: do
+NOT rewrite them while debugging. (A past debugging rewrite silently reverted sk8Query to the
+wrong MCP protocol and broke data loading after auth already worked — the connector logic was
+never the problem.)
+
+After building, VERIFY: (1) both /functions/sk8OAuth and /functions/sk8Query are deployed, and
+(2) a data query actually returns rows — not merely that /functions/sk8Query is reachable, since
+a stale deploy can answer at the route and still fail at the MCP handshake. If sign-in succeeds
+but data won't load, suspect a stale/regressed sk8Query (re-deploy it cleanly), NOT the auth flow
+or the Auth0 callback URL.
 ```
 
 > The inference happens **once, at build time**, and the result is written explicitly into the
@@ -160,9 +172,21 @@ function App() {
 ## Sign-in gate (any page)
 
 ```jsx
+import { useState, useEffect } from "react";
 import { getToken, getLoginUrl, clearTokens } from "@/lib/sk8Client";
 
-const [token] = useState(() => getToken());
+const [token, setToken] = useState(() => getToken());
+
+// The OAuth callback writes the token to localStorage — sometimes from a different
+// tab/window or with a timing gap from this component's mount. Re-read on storage
+// changes so the UI reflects sign-in without a manual refresh.
+// (Use useState's setter + this effect; do NOT read the token only once at mount.)
+useEffect(() => {
+  const sync = () => setToken(getToken());
+  window.addEventListener("storage", sync);
+  return () => window.removeEventListener("storage", sync);
+}, []);
+
 if (!token) {
   return (
     <button onClick={async () => { window.location.href = await getLoginUrl(); }}>
@@ -171,7 +195,7 @@ if (!token) {
   );
 }
 // signed in — call listDatasets() / queryDataset() / fetchRows()
-// sign out: clearTokens(); window.location.reload();
+// sign out: clearTokens(); setToken(null);
 ```
 
 ## Using the data API
@@ -240,6 +264,16 @@ bounded fetch and treat it as non-scaling until a `contains` filter is available
   repo — it's a duplicate of the real `entry.ts`; delete it.
 - **The frontend calls functions with `fetch("/functions/<name>")`** — no `base44.functions.invoke`
   needed, and the integration-mode config fetch works before the user signs in.
+- **The frozen files are frozen *even while debugging*.** `sk8Client.js`, the two function bodies,
+  and `OAuthCallback.jsx` are correct as shipped. The recurring failures in this connector's
+  history were builder-induced drift — an env-read deploy block, function mis-nesting, and an
+  exploratory rewrite that reverted `sk8Query` to an obsolete MCP SSE init (rejected with 401).
+  When something breaks, re-deploy the verbatim file; don't "try a different approach" in these files.
+- **Verify after every build/redeploy.** A successful sign-in does NOT prove `sk8Query` works —
+  auth and data are separate functions. Confirm a real `queryDataset()`/`listDatasets()` returns
+  rows, and after any redeploy confirm the *new* code is actually live (a stale function can keep
+  serving the old protocol). Misdiagnosis usually points at "the Auth0 callback URL" — it almost
+  never is; check the deployed function instead.
 
 ## Pinning (for bulletproof reuse)
 
