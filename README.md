@@ -2,7 +2,7 @@
 
 Frozen code to authenticate a Base44 app to a **SK8 MCP server** (OIDC + PKCE, public client — no
 secret) and query SK8 datasets. Build new apps against a pinned tag, e.g.
-`https://github.com/sk8io/base44/tree/v4.2.1`.
+`https://github.com/sk8io/base44/tree/v4.3.0`.
 
 Config is centralized: the `sk8-connector-config` Base44 integration serves `configPublic`
 (issuer, client_id, mcp_url, …), so a new app needs **zero SK8 configuration** — it just copies the
@@ -13,16 +13,17 @@ connector files.
 Paste this into your Base44 builder:
 
 ```text
-Build my app using the SK8 ↔ Base44 connector at https://github.com/sk8io/base44/tree/v4.2.1
+Build my app using the SK8 ↔ Base44 connector at https://github.com/sk8io/base44/tree/v4.3.0
 (use this EXACT tag, not the default branch).
 
-Copy these files verbatim into the same paths:
+Copy these FRONTEND files verbatim into the same paths:
   src/lib/sk8Config.js, src/lib/sk8Config.static.js, src/lib/sk8Config.integration.js,
-  src/lib/sk8Client.js, src/pages/OAuthCallback.jsx,
-  base44/functions/sk8OAuth/entry.ts, base44/functions/sk8Query/entry.ts
+  src/lib/sk8Client.js, src/pages/OAuthCallback.jsx
 
-The two backend functions are PLAIN JAVASCRIPT with NO imports — do not rewrite them, do not add
-TypeScript types, do not add an npm import. Create them by their exact names: sk8OAuth and sk8Query.
+The two backend functions are the files sk8OAuth.js and sk8Query.js at the ROOT of this repo. Create
+two Base44 backend functions named exactly sk8OAuth and sk8Query and copy that code AS-IS — do NOT
+recreate the source file's name or folder layout, just create the two named functions. They are
+PLAIN JAVASCRIPT with NO imports; do not add TypeScript types or an npm import.
 
 Leave CONFIG_MODE = "integration" (the default) — config loads automatically from the
 sk8-connector-config integration. Fill nothing.
@@ -85,9 +86,9 @@ clearTokens();                                                  // sign out
 
 ## Don't break these
 
-- Backend functions stay **plain JS with no imports**, named `sk8OAuth` / `sk8Query` at
-  `base44/functions/<name>/entry.ts`. An npm import or TypeScript syntax makes them fail to deploy
-  ("function not found or not deployed"). They take all config from the frontend — no per-app edits.
+- Backend functions stay **plain JS with no imports** — create them by name (`sk8OAuth` / `sk8Query`)
+  with the code from this repo's root `sk8OAuth.js` / `sk8Query.js`. An npm import or TypeScript syntax
+  makes them fail to deploy. They take all config from the frontend — no per-app edits.
 - **Frozen** (don't rewrite while debugging): `sk8Client.js`, both function bodies, `OAuthCallback.jsx`.
 - A working sign-in does **not** prove `sk8Query` works — verify a data query separately.
 
