@@ -8,8 +8,12 @@
 //   "integration" → fetches issuer/client_id from configPublic and the secret
 //                   from configSecret (sk8-connector-config custom integration)
 // The client secret never leaves this backend in either mode.
+//
+// @base44/sdk is imported LAZILY (dynamic import) inside loadConfig's integration
+// branch — NEVER at module top — so STATIC-mode apps carry ZERO backend
+// dependencies and deploy reliably on Deno. A top-level `npm:` import here is what
+// historically caused "Backend function 'sk8OAuth' not found or not deployed".
 // ============================================================================
-import { createClientFromRequest } from "npm:@base44/sdk@0.8.31";
 
 // ▼▼▼ THE ONLY SWITCH ▼▼▼  ("static" | "integration")
 const CONFIG_MODE = "integration";
@@ -41,6 +45,7 @@ async function loadConfig(req) {
   if (CONFIG_MODE === "static") {
     return { ISSUER: STATIC_ISSUER, CLIENT_ID: STATIC_CLIENT_ID, CLIENT_SECRET: ENV_CLIENT_SECRET };
   }
+  const { createClientFromRequest } = await import("npm:@base44/sdk@0.8.31");
   const base44 = createClientFromRequest(req);
   const [pub, sec] = await Promise.all([
     base44.asServiceRole.integrations.custom.call(INTEGRATION, "get:/functions/configPublic", {}),
