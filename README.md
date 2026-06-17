@@ -7,8 +7,8 @@ Connect + PKCE, with refresh and stateful MCP session handling) and querying SK8
 auth or query logic — it is already correct and battle-tested.** Only a handful of config
 values change per deployment, and only one of them is a secret.
 
-> **Pinned version: `v4.0.0`.** Build new apps against the tag
-> [`https://github.com/sk8io/base44/tree/v4.0.0`](https://github.com/sk8io/base44/tree/v4.0.0),
+> **Pinned version: `v4.1.0`.** Build new apps against the tag
+> [`https://github.com/sk8io/base44/tree/v4.1.0`](https://github.com/sk8io/base44/tree/v4.1.0),
 > **not** the moving default branch, so every app builds from an identical, verified snapshot.
 > Bump the tag in the prompt below when you cut a new release.
 
@@ -43,7 +43,7 @@ You don't pick the mode — the builder infers it by checking whether the
 single block:
 
 ```text
-Build my app using the SK8 ↔ Base44 connector at https://github.com/sk8io/base44/tree/v4.0.0
+Build my app using the SK8 ↔ Base44 connector at https://github.com/sk8io/base44/tree/v4.1.0
 (use this EXACT tag — do NOT use the default branch).
 Copy ALL connector files verbatim into the same paths, then choose the config mode AUTOMATICALLY:
 
@@ -277,6 +277,19 @@ bounded fetch and treat it as non-scaling until a `contains` filter is available
   "Token exchange failed" at login even though the path is correct. Keep them annotation-free; do
   not "TypeScript-ify" them. (A `.ts` file with no type syntax is valid JavaScript byte-for-byte,
   so it runs whether Base44 keeps the `.ts` name or mirrors it to `.js`.)
+- **No top-level `npm:` imports in backend functions.** A static `import … from "npm:…"` at module
+  top is an unconditional dependency Deno must resolve when the function boots; if it can't
+  (version / registry / specifier), the function fails to start and the platform reports
+  **"Backend function '<name>' not found or not deployed"** — looks identical to a missing function.
+  The connector imports `@base44/sdk` **lazily** (`await import("npm:@base44/sdk@…")`) inside the
+  integration code path only, so **static-mode apps carry zero backend dependencies** and deploy as
+  reliably as the original static connector. Do not hoist the import back to module top.
+- **Most reliable setup: a public/PKCE client in static mode.** A Base44 app is a browser SPA, so the
+  natural OAuth client is **public + PKCE, no secret** (the same kind SK8's MCP already accepts from
+  Claude/Cursor). With a public client there is no secret to fetch, so static mode needs no
+  `configSecret` and the backend functions never touch `@base44/sdk` at all — the most dependency-free,
+  reliably-deploying configuration. Use a confidential client + the secret only if you specifically
+  need backend client authentication.
 - **Functions live at `base44/functions/<name>/entry.ts`** — that is the correct path Base44
   mirrors to git. Do **not** relocate them to `functions/<name>.js`.
 - **A stray `base44/functions/<name>/entry/entry.ts`** may appear after the builder copies this

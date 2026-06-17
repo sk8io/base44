@@ -7,8 +7,12 @@
 //   "static"      → uses STATIC_MCP_URL
 //   "integration" → fetches mcp_url from configPublic (sk8-connector-config)
 // No secret is needed here in either mode.
+//
+// @base44/sdk is imported LAZILY (dynamic import) inside getMcpUrl's integration
+// branch — NEVER at module top — so STATIC-mode apps carry ZERO backend
+// dependencies and deploy reliably on Deno. A top-level `npm:` import here is what
+// historically caused "Backend function 'sk8Query' not found or not deployed".
 // ============================================================================
-import { createClientFromRequest } from "npm:@base44/sdk@0.8.31";
 
 // ▼▼▼ THE ONLY SWITCH ▼▼▼  ("static" | "integration")
 const CONFIG_MODE = "integration";
@@ -27,6 +31,7 @@ async function getMcpUrl(req) {
       throw new Error("STATIC_MCP_URL is not configured");
     return STATIC_MCP_URL;
   }
+  const { createClientFromRequest } = await import("npm:@base44/sdk@0.8.31");
   const base44 = createClientFromRequest(req);
   const res = await base44.asServiceRole.integrations.custom.call(INTEGRATION, "get:/functions/configPublic", {});
   if (!res.success) throw new Error(`SK8 config load failed (${res.status_code})`);
