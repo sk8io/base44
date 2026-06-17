@@ -2,7 +2,7 @@
 
 Frozen code to authenticate a Base44 app to a **SK8 MCP server** (OIDC + PKCE, public client — no
 secret) and query SK8 datasets. Build new apps against a pinned tag, e.g.
-`https://github.com/sk8io/base44/tree/v4.2.0`.
+`https://github.com/sk8io/base44/tree/v4.2.1`.
 
 Config is centralized: the `sk8-connector-config` Base44 integration serves `configPublic`
 (issuer, client_id, mcp_url, …), so a new app needs **zero SK8 configuration** — it just copies the
@@ -13,7 +13,7 @@ connector files.
 Paste this into your Base44 builder:
 
 ```text
-Build my app using the SK8 ↔ Base44 connector at https://github.com/sk8io/base44/tree/v4.2.0
+Build my app using the SK8 ↔ Base44 connector at https://github.com/sk8io/base44/tree/v4.2.1
 (use this EXACT tag, not the default branch).
 
 Copy these files verbatim into the same paths:
