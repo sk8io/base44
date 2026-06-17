@@ -4,6 +4,7 @@
 // ============================================================================
 import { useEffect, useState } from "react";
 import { expectedState, getPkceVerifier, clearOauthTransients, storeTokens } from "@/lib/sk8Client";
+import { getSk8Config } from "@/lib/sk8Config";
 
 export default function OAuthCallback() {
   const [lines, setLines] = useState(["Mounting..."]);
@@ -23,15 +24,20 @@ export default function OAuthCallback() {
     if (!verifier) { log("ABORT: missing PKCE verifier"); return; }
     log("state + PKCE OK — exchanging code...");
 
-    fetch("/functions/sk8OAuth", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "exchange",
-        code,
-        redirectUri: window.location.origin + "/oauth/callback",
-        codeVerifier: verifier,
-      }),
-    })
+    getSk8Config()
+      .then(({ ISSUER, CLIENT_ID }) =>
+        fetch("/functions/sk8OAuth", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "exchange",
+            code,
+            redirectUri: window.location.origin + "/oauth/callback",
+            codeVerifier: verifier,
+            issuer: ISSUER,
+            clientId: CLIENT_ID,
+          }),
+        })
+      )
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok)            { log("ERROR: " + (data.error || "unknown")); return; }
