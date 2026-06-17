@@ -83,9 +83,10 @@ const expiringSoon = () => {
 async function refreshAccessToken() {
   const refreshToken = getRefreshToken();
   if (!refreshToken) { clearTokens(); throw new Error("session expired — please sign in again"); }
+  const { ISSUER, CLIENT_ID } = await getSk8Config();
   const res = await fetch("/functions/sk8OAuth", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "refresh", refreshToken }),
+    body: JSON.stringify({ action: "refresh", refreshToken, issuer: ISSUER, clientId: CLIENT_ID }),
   });
   const data = await res.json();
   if (!res.ok) { clearTokens(); throw new Error(data.error || "session expired — please sign in again"); }
@@ -104,9 +105,10 @@ let cachedSession = null;
 
 async function sk8Call(tool, toolArguments, action = null, _retried = false) {
   const token = await ensureToken();
+  const { MCP_URL } = await getSk8Config();
   const res = await fetch("/functions/sk8Query", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sk8Token: token, sessionId: cachedSession, tool, toolArguments, action }),
+    body: JSON.stringify({ sk8Token: token, sessionId: cachedSession, tool, toolArguments, action, mcpUrl: MCP_URL }),
   });
   const data = await res.json().catch(() => ({}));
 

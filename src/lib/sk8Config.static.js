@@ -2,14 +2,9 @@
 // SK8 ↔ Base44 connector — STATIC config provider (build-time values)
 // ----------------------------------------------------------------------------
 // Used when CONFIG_MODE === "static" in sk8Config.js.
-// Fill the marked values per deployment (see README → "IdP matrix").
-// The ONLY secret (client secret) is NEVER here — it is set as the
-// SK8_CLIENT_SECRET env var on the backend (see sk8OAuth/entry.ts).
-//
-// In static mode you must also set the matching backend consts:
-//   • sk8OAuth/entry.ts → STATIC_ISSUER, STATIC_CLIENT_ID   (= ISSUER, CLIENT_ID)
-//   • sk8Query/entry.ts → STATIC_MCP_URL                     (= MCP_URL)
-// (Backend functions can't import this frontend file, hence the duplication.)
+// Fill the marked values per deployment. Public/PKCE only — no client secret.
+// The backend functions need NO per-app edits: the frontend passes issuer /
+// clientId / mcpUrl to them at runtime.
 // ============================================================================
 export async function loadConfig() {
   return {

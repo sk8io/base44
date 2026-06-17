@@ -2,65 +2,17 @@
 // SK8 ↔ Base44 connector — backend OAuth function (Deno)
 // Base44 function path: base44/functions/sk8OAuth/entry.ts
 // ----------------------------------------------------------------------------
-// FROZEN logic. Per-deployment config comes from loadConfig(); choose its
-// source with CONFIG_MODE below (must match src/lib/sk8Config.js).
-//   "static"      → uses the STATIC_* consts + SK8_CLIENT_SECRET env var
-//   "integration" → fetches issuer/client_id from configPublic and the secret
-//                   from configSecret (sk8-connector-config custom integration)
-// The client secret never leaves this backend in either mode.
+// FROZEN logic. A thin, DEPENDENCY-FREE PKCE token-exchange proxy. The frontend
+// (sk8Client.js) resolves the per-deployment config via getSk8Config() — from the
+// sk8-connector-config integration's configPublic, or static consts — and passes
+// `issuer` and `clientId` on each request. PUBLIC / PKCE client only: there is NO
+// client secret anywhere. This file has NO imports and makes NO integration call,
+// which is why it deploys reliably. (A top-level `npm:` import or TypeScript syntax
+// makes the function fail to deploy — "Backend function 'sk8OAuth' not found or not
+// deployed".)
 //
-// @base44/sdk is imported LAZILY (dynamic import) inside loadConfig's integration
-// branch — NEVER at module top — so STATIC-mode apps carry ZERO backend
-// dependencies and deploy reliably on Deno. A top-level `npm:` import here is what
-// historically caused "Backend function 'sk8OAuth' not found or not deployed".
+// PLAIN JAVASCRIPT only — no TypeScript type annotations.
 // ============================================================================
-
-// ▼▼▼ THE ONLY SWITCH ▼▼▼  ("static" | "integration")
-const CONFIG_MODE = "integration";
-// ▲▲▲
-
-// ---- STATIC mode: fill these (ignored when CONFIG_MODE === "integration") ---
-// Must match src/lib/sk8Config.static.js → ISSUER, CLIENT_ID.
-const STATIC_ISSUER    = "https://<YOUR-IDP-ISSUER>/";
-const STATIC_CLIENT_ID = "<YOUR-CLIENT-ID>";
-
-// The ONLY secret. Default `undefined` so a fresh INTEGRATION-mode app deploys
-// with NO required env var (the secret is fetched from configSecret instead).
-//
-// Base44 gotcha: reading a named environment variable in this file makes the
-// platform REQUIRE that var before the function will run — even when the read
-// sits in an unused branch — which blocks deploy with a "missing secret" error.
-// So keep ZERO env reads here by default. (This note deliberately avoids writing
-// the literal env-read API call, so the platform's secret scanner won't flag it.)
-//
-// CONFIDENTIAL STATIC client only: set ENV_CLIENT_SECRET below to an environment
-// read of SK8_CLIENT_SECRET — see the README "Base44 platform notes" for the exact
-// one line — and set that env var in Dashboard -> Settings -> Environment Variables.
-// Doing so intentionally makes Base44 require it, which is correct for a confidential client.
-const ENV_CLIENT_SECRET = undefined;
-
-const INTEGRATION = "sk8-connector-config";
-
-async function loadConfig(req) {
-  if (CONFIG_MODE === "static") {
-    return { ISSUER: STATIC_ISSUER, CLIENT_ID: STATIC_CLIENT_ID, CLIENT_SECRET: ENV_CLIENT_SECRET };
-  }
-  const { createClientFromRequest } = await import("npm:@base44/sdk@0.8.31");
-  const base44 = createClientFromRequest(req);
-  const [pub, sec] = await Promise.all([
-    base44.asServiceRole.integrations.custom.call(INTEGRATION, "get:/functions/configPublic", {}),
-    base44.asServiceRole.integrations.custom.call(INTEGRATION, "get:/functions/configSecret", {}),
-  ]);
-  if (!pub.success) throw new Error(`public config load failed (${pub.status_code})`);
-  if (!sec.success) throw new Error(`secret config load failed (${sec.status_code})`);
-  return {
-    ISSUER:        pub.data.issuer,
-    CLIENT_ID:     pub.data.client_id,
-    // configSecret is authoritative in integration mode; no env fallback so a
-    // stray SK8_CLIENT_SECRET can't be injected into a public/PKCE client.
-    CLIENT_SECRET: sec.data.client_secret,
-  };
-}
 
 // ---- OIDC discovery (cached, keyed by issuer) -----------------------------
 let _meta = null, _metaIssuer = null;
@@ -76,24 +28,19 @@ async function oidcMeta(issuer) {
 
 Deno.serve(async (req) => {
   try {
-    const cfg = await loadConfig(req);
+    const { action, code, redirectUri, codeVerifier, refreshToken, issuer, clientId } = await req.json();
+    if (!issuer || !clientId)
+      return Response.json({ error: "issuer and clientId are required (sent by the frontend)" }, { status: 400 });
 
     async function tokenRequest(extra) {
-      const { token_endpoint } = await oidcMeta(cfg.ISSUER);
-      const payload = {
-        client_id: cfg.CLIENT_ID,
-        ...(cfg.CLIENT_SECRET ? { client_secret: cfg.CLIENT_SECRET } : {}),
-        ...extra,
-      };
+      const { token_endpoint } = await oidcMeta(issuer);
       const res = await fetch(token_endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" }, // required by Okta/Entra/Keycloak
-        body: new URLSearchParams(payload),
+        body: new URLSearchParams({ client_id: clientId, ...extra }),
       });
       return { ok: res.ok, data: await res.json() };
     }
-
-    const { action, code, redirectUri, codeVerifier, refreshToken } = await req.json();
 
     if (action === "exchange") {
       if (!code || !redirectUri || !codeVerifier)

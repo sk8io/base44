@@ -2,43 +2,18 @@
 // SK8 ↔ Base44 connector — backend MCP proxy (Deno)
 // Base44 function path: base44/functions/sk8Query/entry.ts
 // ----------------------------------------------------------------------------
-// FROZEN logic. The MCP URL comes from getMcpUrl(); choose its source with
-// CONFIG_MODE below (must match src/lib/sk8Config.js).
-//   "static"      → uses STATIC_MCP_URL
-//   "integration" → fetches mcp_url from configPublic (sk8-connector-config)
-// No secret is needed here in either mode.
+// FROZEN logic. This function is a thin, DEPENDENCY-FREE proxy: the frontend
+// (sk8Client.js) resolves the MCP URL via getSk8Config() — from the
+// sk8-connector-config integration's configPublic, or static consts — and passes
+// it as `mcpUrl` on each request. So this file has NO imports and makes NO
+// integration call; it never needs @base44/sdk, which is why it deploys reliably.
+// (A top-level `npm:` import or TypeScript syntax makes the function fail to
+// deploy — "Backend function 'sk8Query' not found or not deployed".)
 //
-// @base44/sdk is imported LAZILY (dynamic import) inside getMcpUrl's integration
-// branch — NEVER at module top — so STATIC-mode apps carry ZERO backend
-// dependencies and deploy reliably on Deno. A top-level `npm:` import here is what
-// historically caused "Backend function 'sk8Query' not found or not deployed".
+// PLAIN JAVASCRIPT only — no TypeScript type annotations.
 // ============================================================================
 
-// ▼▼▼ THE ONLY SWITCH ▼▼▼  ("static" | "integration")
-const CONFIG_MODE = "integration";
-// ▲▲▲
-
-// ---- STATIC mode: fill this (ignored when CONFIG_MODE === "integration") ----
-// Must match src/lib/sk8Config.static.js → MCP_URL.
-const STATIC_MCP_URL = "https://<YOUR-SK8-URL>/api-gateway/v1/mcp";
-
-const INTEGRATION = "sk8-connector-config";
 const PROTOCOL_VERSION = "2024-11-05";
-
-async function getMcpUrl(req) {
-  if (CONFIG_MODE === "static") {
-    if (!STATIC_MCP_URL || STATIC_MCP_URL.includes("<"))
-      throw new Error("STATIC_MCP_URL is not configured");
-    return STATIC_MCP_URL;
-  }
-  const { createClientFromRequest } = await import("npm:@base44/sdk@0.8.31");
-  const base44 = createClientFromRequest(req);
-  const res = await base44.asServiceRole.integrations.custom.call(INTEGRATION, "get:/functions/configPublic", {});
-  if (!res.success) throw new Error(`SK8 config load failed (${res.status_code})`);
-  const url = res.data.mcp_url;
-  if (!url) throw new Error("mcp_url missing from sk8-connector-config");
-  return url;
-}
 
 function parseSse(text) {
   for (const line of text.split("\n")) {
@@ -92,14 +67,14 @@ async function mcpCall(rpc, token, sessionId, method, params) {
 
 Deno.serve(async (req) => {
   try {
-    const mcpUrl = await getMcpUrl(req);
-    const rpc = makeRpc(mcpUrl);
-
     const body = await req.json();
-    const { tool, toolArguments, action, sk8Token } = body;
+    const { tool, toolArguments, action, sk8Token, mcpUrl } = body;
     let { sessionId } = body;
 
     if (!sk8Token) return Response.json({ error: "sk8Token is required" }, { status: 400 });
+    if (!mcpUrl)   return Response.json({ error: "mcpUrl is required (sent by the frontend)" }, { status: 400 });
+
+    const rpc = makeRpc(mcpUrl);
 
     let fresh = false;
     if (!sessionId) { sessionId = await mcpInit(rpc, sk8Token); fresh = true; }

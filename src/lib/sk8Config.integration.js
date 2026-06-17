@@ -2,12 +2,10 @@
 // SK8 ↔ Base44 connector — INTEGRATION config provider (runtime fetch)
 // ----------------------------------------------------------------------------
 // Used when CONFIG_MODE === "integration" in sk8Config.js.
-// Fetches the NON-SECRET config from the "sk8-connector-config" custom
-// integration (operation: GET /functions/configPublic). Nothing to fill here.
+// Fetches the config from the "sk8-connector-config" custom integration
+// (operation: GET /functions/configPublic). Nothing to fill here.
 //
-// The client secret is NEVER fetched in the browser — it is read only by the
-// backend sk8OAuth function (via the configSecret operation). This provider
-// returns only public values.
+// Public/PKCE only — this connector has no client secret anywhere.
 //
 // Prerequisite: a workspace admin must have registered the custom integration
 // named exactly "sk8-connector-config" with the X-Config-Key header. Base44
