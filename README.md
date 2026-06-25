@@ -1,5 +1,29 @@
 # SK8 ↔ Base44 Connector
 
+> ## ⚠️ RETIRED / SUPERSEDED (2026-06-25) — do NOT use for new apps
+>
+> **BPT-406** replaced this shipped-code connector with a **self-instructing SK8 MCP server.** The
+> server now exposes a `get_sk8_integration_spec` tool: a vibe-coding builder (Lovable, Base44, …)
+> connects the SK8 MCP URL once at the account level, calls that tool, and **writes its own**
+> per-end-user integration from the live spec. No external connector repo at a pinned tag, no
+> copy-verbatim files, and no `sk8-connector-config` app.
+>
+> This was validated by a **clean cold Lovable build — first-try, working on both auth and data**,
+> after iterating the spec across six trials (resource-not-audience, DCR-per-origin, per-end-user PKCE,
+> server-side verifier, preview-iframe OAuth, x-forwarded-host origin, SameSite=None, refetch-after-
+> signin; legible backend errors; NUMBER→JSON-number; aggregate-for-totals data-access guidance).
+>
+> **Why this repo is kept:** historical reference only. The frozen-files / "copy verbatim" / centralized
+> `sk8-connector-config` model below is exactly the friction BPT-406 removed — it is preserved so the
+> approach (and the lessons that drove the switch) remain available for future use. The full process /
+> journey lives in the sk8-monorepo plan:
+> `docs/plans/20260622_131226_feature_BPT-406-mcp-integration-tool/` (task_plan.md, findings.md,
+> progress.md) and GitHub issue sk8io/sk8-monorepo#523.
+>
+> Everything below is the original (now superseded) connector documentation.
+
+---
+
 Frozen code to authenticate a Base44 app to a **SK8 MCP server** (OIDC + PKCE, public client — no
 secret) and query SK8 datasets. Build new apps against a pinned tag, e.g.
 `https://github.com/sk8io/base44/tree/v4.3.0`.
